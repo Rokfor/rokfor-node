@@ -395,6 +395,6 @@ rfC.initialize().then(function(data){
   var config = require('./config/config.js')
   app.listen(config.pollport, function () {
     console.log("* starting Rokfor -> Writer Sync...")
-    console.log(`  - Listening on Port ${pollport}`)
+    console.log(`  - Listening on Port ${config.pollport}`)
   });
 });
