@@ -387,14 +387,20 @@ app.post('/poll', jsonParser, function (req, res) {
   })
 });
 
+app.get('/',function(req,res)
+{
+    res.send("Rokfor <-> CouchDB Sync Server");
+});
+
 
 rfC.initialize().then(function(data){
   if (data !== false) {
     rfC.writer2rokfor();
   }
   var config = require('./config/config.js')
-  app.listen(config.pollport, function () {
+  var port = (process.env.PORT || config.pollport);
+  app.listen(port, function () {
     console.log("* starting Rokfor -> Writer Sync...")
-    console.log(`  - Listening on Port ${config.pollport}`)
+    console.log(`  - Listening on Port ${port}`)
   });
 });
