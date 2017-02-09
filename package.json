@@ -1,0 +1,24 @@
+{
+  "name": "rokfor-node",
+  "version": "1.0.0",
+  "description": "Node Server syncing CouchDB to Rokfor",
+  "main": "index.js",
+  "dependencies": {
+    "body-parser": "^1.16.0",
+    "cradle": "^0.7.1",
+    "cradle_security": "github:urshofer/cradle_security",
+    "express": "^4.14.1",
+    "q": "^1.4.1",
+    "unirest": "^0.5.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "Rokfor",
+    "CouchDB"
+  ],
+  "author": "Urs Hofer",
+  "license": "MIT"
+}
