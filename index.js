@@ -392,8 +392,9 @@ rfC.initialize().then(function(data){
   if (data !== false) {
     rfC.writer2rokfor();
   }
-  app.listen(5050, function () {
+  var config = require('./config.js')
+  app.listen(config.pollport, function () {
     console.log("* starting Rokfor -> Writer Sync...")
-    console.log("  - Listening on Port 5050")
+    console.log(`  - Listening on Port ${pollport}`)
   });
 });
