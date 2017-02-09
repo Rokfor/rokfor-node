@@ -15,7 +15,7 @@ var q = require("q"),
 class RokforConnector {
   constructor() {
 
-    var config = require('./config.js')
+    var config = require('./config/config.js')
 
     var
       server      = config.server,
@@ -392,7 +392,7 @@ rfC.initialize().then(function(data){
   if (data !== false) {
     rfC.writer2rokfor();
   }
-  var config = require('./config.js')
+  var config = require('./config/config.js')
   app.listen(config.pollport, function () {
     console.log("* starting Rokfor -> Writer Sync...")
     console.log(`  - Listening on Port ${pollport}`)
