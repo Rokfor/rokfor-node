@@ -39,6 +39,7 @@ class RokforConnector {
     this.unirest  = require("unirest");
     this.jwt = false;
     this.api = config.api;
+    this.locks = [];
   }
 
   /**
@@ -222,6 +223,27 @@ class RokforConnector {
       this.writer2rokfor();
   }
 
+  isLockedContribution(id) {
+    let i = this.locks.indexOf(id) > -1 ? true : false;
+    if (i === true) {
+      console.log(`IS Locked ${id}`);
+    }
+    return (i);
+  }
+
+  lockContribution(id) {
+    //console.log(`Add lock ${id}`);
+    this.locks.push(id);
+  }
+
+  unlockContribution(id) {
+    let i = this.locks.indexOf(id);
+    if (i > -1) {
+      //console.log(`Unlock ${id}`);
+      this.locks.splice(i, 1);
+    }
+  }
+
 
   /**
    * writer2rokfor
@@ -238,9 +260,16 @@ class RokforConnector {
         if (name.indexOf("data-") !== -1) {
           let _watcher = _this.connection.database(name).changes({since:"now", include_docs: true});
           _watcher.on('change', function (changes) {
+
+            if (_this.isLockedContribution(changes.id) === true) {
+              return;
+            }
+
+
             // Create, Update, Delete
             if (changes.deleted === true) {
               //console.log(`DEL Document Id ${changes.id}`, changes.doc.data);
+              _this.lockContribution(changes.id);
               var req = _this.unirest("DELETE", `${_this.api.endpoint}contribution/${changes.doc.data}`);
               req.headers({
                 "content-type": "application/json",
@@ -255,6 +284,7 @@ class RokforConnector {
             }
             else {
               if (changes.doc.data.id === -1 || changes.doc.data.id === 0) {
+                _this.lockContribution(changes.id);
                 console.log("PUT Document");
                 // Creat new Rokfor Document
                 var req = _this.unirest("PUT", `${_this.api.endpoint}contribution`);
@@ -276,15 +306,28 @@ class RokforConnector {
                   }
                   else {
                     let _newContribution = res.body;
-                    _this.storeContribution(changes, name, _newContribution.Id);
-                    // Update CouchDB with Rokfor id
-                    _this.updateCouch(changes, name, _newContribution.Id);
+                    _this.storeContribution(changes, name, _newContribution.Id).then(function(err){
+                      console.log('+++ finished storeContribtution: ', err);
+                      if (err) {
+                        _this.unlockContribution(changes.id);
+                      }
+                      else {
+                        // Update CouchDB with Rokfor id
+                        _this.updateCouch(changes, name, _newContribution.Id).then(function(err){
+                          _this.unlockContribution(changes.id);
+                        });
+                      }
+                    });
+
                   }
                 });
               }
               else if (changes.doc.data) {
+                _this.lockContribution(changes.id);
                 // console.log(`UPDATE Document ${changes.doc.data.name}`);
-                _this.storeContribution(changes, name);
+                _this.storeContribution(changes, name).then(function(err){
+                  _this.unlockContribution(changes.id);
+                });
               }
             }
           }.bind(name));
@@ -304,6 +347,7 @@ class RokforConnector {
    **/
 
   updateCouch(changes, dbname, id) {
+    var deferred = q.defer();
     console.log('need to update id in CouchDB', changes.doc.data.id, id);
     if (changes.doc.data.id !== id) {
       let _db = this.connection.database(dbname);
@@ -311,8 +355,10 @@ class RokforConnector {
       _data.id = id;
       _db.merge(changes.id, {rokforid: id, data: _data}, function (err, res) {
         //console.log(err, res);
+        deferred.resolve(true);
       });
     }
+    return deferred.promise;
   }
 
   /**
@@ -328,7 +374,7 @@ class RokforConnector {
 
     */
 
-
+    var deferred = q.defer();
     id = id || changes.doc.data.id;
     console.log('storeContribution', id);
     let _this = this;
@@ -361,12 +407,14 @@ class RokforConnector {
           else {
             console.log("Resetting to -1 in CouchDB");
           }
+          deferred.resolve(true);
         });
       }
       else {
-        //console.log(res.body);
+        deferred.resolve(false);
       }
     });
+    return deferred.promise;
   }
 
 }
