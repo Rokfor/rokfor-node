@@ -8,6 +8,8 @@
     "cradle": "^0.7.1",
     "cradle_security": "github:urshofer/cradle_security",
     "express": "^4.14.1",
+    "fs": "0.0.1-security",
+    "log": "^1.4.0",
     "q": "^1.4.1",
     "unirest": "^0.5.1"
   },

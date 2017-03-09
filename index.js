@@ -7,15 +7,19 @@
  **/
 "use strict";
 
+var config = require('./config/config.js')
+
 var q = require("q"),
     express = require('express'),
-    bodyParser = require('body-parser')
+    bodyParser = require('body-parser'),
+    fs = require('fs'),
+    Log = require('log'),
+    log = new Log(config.loglevel, fs.createWriteStream('my.log'));
 
 
 class RokforConnector {
   constructor() {
 
-    var config = require('./config/config.js')
 
     var
       server      = config.server,
@@ -23,7 +27,7 @@ class RokforConnector {
     	username    = config.username,
       userpass    = config.userpass;
     this.cradle      = require('cradle_security')({
-                        debug: false,                // set true to see all log messages
+                        debug: true,                // set true to see all log messages
                         adminUsername: username,     // set your admin username
                         adminPassword: userpass   // set your admin password
                     });
@@ -89,7 +93,7 @@ class RokforConnector {
     db.exists(function (err, exists) {
       if (!err) {
         if (!exists) {
-          console.log(`Creating rf-${username}`);
+          log.info(`Creating rf-${username}`);
           db.createWithUser(
               username,      // username
               apikey,        // password
@@ -100,7 +104,7 @@ class RokforConnector {
                       [ username ],               // array of admin roles
                       [ username ],               // array of member roles
                       function (err, res) {       // callback
-                        console.log(res);
+                        log.info(res);
                         _this.syncIssues(username, apikey)
                       }
                   );
@@ -116,7 +120,7 @@ class RokforConnector {
     var db2 = this.connection.database(`data-${username}`);
     db2.exists(function (err, exists) {
       if (!err && !exists) {
-        console.log(`Creating data-${username}`);
+        log.info(`Creating data-${username}`);
         db2.createWithUser(
             username,                 // username
             apikey,        // password
@@ -127,7 +131,7 @@ class RokforConnector {
                     [ username ],               // array of admin roles
                     [ username ],               // array of member roles
                     function (err, res) {       // callback
-                      console.log(res);
+                      log.info(res);
                       _this.syncIssues(username, apikey)
                     }
                 );
@@ -154,7 +158,7 @@ class RokforConnector {
     });
     req.end(function (res) {
       if (res.error) {
-        console.log('syncIssues: could not connect to rokfor api');
+        log.info('syncIssues: could not connect to rokfor api');
       }
       else {
         let _db = _this.connection.database(`rf-${username}`);
@@ -164,16 +168,16 @@ class RokforConnector {
               _db.save('issues', {
                 data: res.body
               }, function (err, res) {
-                console.log(`synced issues for ${username}`)
+                log.info(`synced issues for ${username}`)
                 _this.reSync();
               });
             }
             else {
-              console.log('error merging Issues into CouchDB')
+              log.info('error merging Issues into CouchDB')
             }
           }
           else {
-            console.log(`synced issues for ${username}`)
+            log.info(`synced issues for ${username}`)
             _this.reSync();
           }
         });
@@ -226,7 +230,7 @@ class RokforConnector {
   isLockedContribution(id) {
     let i = this.locks.indexOf(id) > -1 ? true : false;
     if (i === true) {
-      console.log(`IS Locked ${id}`);
+      log.info(`IS Locked ${id}`);
     }
     return (i);
   }
@@ -253,7 +257,7 @@ class RokforConnector {
    **/
 
   writer2rokfor() {
-    console.log("* starting Writer -> Rokfor Sync...")
+    log.info("* starting Writer -> Rokfor Sync...")
     let _this = this;
     this.connection.databases(function(a,e){
       e.forEach(function(name) {
@@ -285,7 +289,7 @@ class RokforConnector {
             else {
               if (changes.doc.data.id === -1 || changes.doc.data.id === 0) {
                 _this.lockContribution(changes.id);
-                console.log("PUT Document");
+                log.info("PUT Document");
                 // Creat new Rokfor Document
                 var req = _this.unirest("PUT", `${_this.api.endpoint}contribution`);
                 req.headers({
@@ -302,12 +306,12 @@ class RokforConnector {
                 });
                 req.end(function (res) {
                   if (res.error) {
-                     console.log(res.error);
+                     log.info(res.error);
                   }
                   else {
                     let _newContribution = res.body;
                     _this.storeContribution(changes, name, _newContribution.Id).then(function(err){
-                      console.log('+++ finished storeContribtution: ', err);
+                      log.info('+++ finished storeContribtution: ', err);
                       if (err) {
                         _this.unlockContribution(changes.id);
                       }
@@ -332,7 +336,7 @@ class RokforConnector {
             }
           }.bind(name));
           _watcher.on('error', function(err){
-            console.log("Error Ocurred", err);
+            log.info("Error Ocurred", err);
           })
           _this.watchers.push(_watcher);
         }
@@ -348,7 +352,7 @@ class RokforConnector {
 
   updateCouch(changes, dbname, id) {
     var deferred = q.defer();
-    console.log('need to update id in CouchDB', changes.doc.data.id, id);
+    log.info('need to update id in CouchDB', changes.doc.data.id, id);
     if (changes.doc.data.id !== id) {
       let _db = this.connection.database(dbname);
       let _data = changes.doc.data;
@@ -376,7 +380,7 @@ class RokforConnector {
 
     var deferred = q.defer();
     id = id || changes.doc.data.id;
-    console.log('storeContribution', id);
+    log.info('storeContribution', id);
     let _this = this;
     var req = _this.unirest("POST", `${_this.api.endpoint}contribution/${id}`);
     req.headers({
@@ -396,16 +400,16 @@ class RokforConnector {
     });
     req.end(function (res) {
       if (res.error) {
-        console.log("Error while posting: ", res);
+        log.info("Error while posting: ", res);
         let _db = _this.connection.database(dbname);
         let _data = changes.doc.data;
         _data.id = -1;
         _db.merge(changes.id, {rokforid: -1, data: _data}, function (err, res) {
           if (err) {
-            console.log("Error while resetting to -1 in CouchDB", err, res);
+            log.info("Error while resetting to -1 in CouchDB", err, res);
           }
           else {
-            console.log("Resetting to -1 in CouchDB");
+            log.info("Resetting to -1 in CouchDB");
           }
           deferred.resolve(true);
         });
@@ -426,7 +430,7 @@ var jsonParser = bodyParser.json()
 app.post('/poll', jsonParser, function (req, res) {
   res.send("ok");
   rfC.loadUsers().then(function(users) {
-    console.log(users);
+    log.info(users);
     // Check if DBs exist in CouchDB: data-{user} and rf-{user}
     // Check if user exists in CouchDB
     users.forEach(function(u){
@@ -448,7 +452,7 @@ rfC.initialize().then(function(data){
   var config = require('./config/config.js')
   var port = (process.env.PORT || config.pollport);
   app.listen(port, function () {
-    console.log("* starting Rokfor -> Writer Sync...")
-    console.log(`  - Listening on Port ${port}`)
+    log.info("* starting Rokfor -> Writer Sync...")
+    log.info(`  - Listening on Port ${port}`)
   });
 });

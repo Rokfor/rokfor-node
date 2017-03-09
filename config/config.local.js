@@ -12,5 +12,6 @@ module.exports = {
     "chapter"  : 1,       // Rokfor Chapter ID for Data Syncing
     "template" : 1        // Rokfor Template ID for Data Syncing
   },
-  pollport    : 5050     // Listener Port for Route Hook Callbacks
+  pollport    : 5050,     // Listener Port for Route Hook Callbacks
+  loglevel    : 'debug'
 }
