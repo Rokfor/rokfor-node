@@ -117,30 +117,70 @@ class RokforConnector {
         }
       }
     });
-    var db2 = this.connection.database(`data-${username}`);
+  }
+
+  /* Checks for existence of issue-{id} Databases in CouchDB
+   * - If it doesn't exists, adds it with the correct user
+   * - If it exists, checks the user rights
+   */
+
+  syncIssueBase(issues, username, apikey, issue_index) {
+    var _this = this;
+    var issue_index = issue_index || 0;
+
+    if (issues[issue_index] === undefined) {
+      return;
+    }
+
+    let issueId = issues[issue_index].Id
+
+
+    var db2 = this.connection.database(`issue-${issueId}`);
     db2.exists(function (err, exists) {
-      if (!err && !exists) {
-        log.info(`Creating data-${username}`);
-        db2.createWithUser(
-            username,                 // username
-            apikey,        // password
-            [],               // array of roles
-            function (err, res) {       // callback
-              if (!err) {
-                db2.addNames(
-                    [ username ],               // array of admin roles
-                    [ username ],               // array of member roles
-                    function (err, res) {       // callback
-                      log.info(res);
-                      _this.syncIssues(username, apikey)
-                    }
-                );
+      if (!err) {
+        if (!exists) {
+          log.info(`Creating issue-${issueId}`);
+          db2.createWithUser(
+              username,                 // username
+              apikey,        // password
+              [],               // array of roles
+              function (err, res) {       // callback
+                if (!err) {
+                  db2.addNames(
+                      [ username ],               // array of admin roles
+                      [ username ],               // array of member roles
+                      function (err, res) {       // callback
+                        log.info(res);
+                        _this.syncIssues(username, apikey)
+                        _this.syncIssueBase(issues, username, apikey, ++issue_index)
+                      }
+                  );
+                }
               }
+          );
+        }
+        else {
+          log.info(`Checking rights for issue-${issueId} / user ${username}`);
+          db2.get('_security', function (err, doc) {
+            let _existing = doc.admins.names;
+            if (_existing.indexOf(username) === -1) {
+              _existing.push(username);
+              db2.addNames(
+                  _existing,               // array of admin roles
+                  [  ],               // array of member roles
+                  function (err, res) {       // callback
+                      log.info(res);       // it should be { ok: true } if no error occurred
+                      _this.syncIssueBase(issues, username, apikey, ++issue_index)
+                  }
+              );
             }
-        );
+          });
+        }
       }
     });
   }
+
+
 
   /**
    *  syncIssues
@@ -168,7 +208,10 @@ class RokforConnector {
               _db.save('issues', {
                 data: res.body
               }, function (err, res) {
-                log.info(`synced issues for ${username}`)
+                log.info(`created issues for ${username}`)
+                if (res.body && res.body.Issues) {
+                  _this.syncIssueBase(res.body.Issues, username, apikey)
+                }
                 _this.reSync();
               });
             }
@@ -178,6 +221,12 @@ class RokforConnector {
           }
           else {
             log.info(`synced issues for ${username}`)
+            if (res.body && res.body.Issues) {
+              _this.syncIssueBase(res.body.Issues, username, apikey)
+            }
+            else {
+              log.info(`no issues for ${res.body}`)
+            }
             _this.reSync();
           }
         });
@@ -261,7 +310,7 @@ class RokforConnector {
     let _this = this;
     this.connection.databases(function(a,e){
       e.forEach(function(name) {
-        if (name.indexOf("data-") !== -1) {
+        if (name.indexOf("issue-") !== -1) {
           let _watcher = _this.connection.database(name).changes({since:"now", include_docs: true});
           _watcher.on('change', function (changes) {
 
@@ -395,7 +444,8 @@ class RokforConnector {
       "Data": {
         "Title": changes.doc.data.title,
         "Body": changes.doc.data.body,
-        "_couchDB": changes.id
+        "_couchDB": changes.id,
+        "_couchVersion": changes.doc._rev.split('-')[0]
       }
     });
     req.end(function (res) {
@@ -421,6 +471,17 @@ class RokforConnector {
     return deferred.promise;
   }
 
+  /*
+   * Syncing Changes Back from Rokfor.
+   *
+   */
+
+  syncContribution(rokforId) {
+
+      // IMPLEMENTATION NEEDED !
+
+  }
+
 }
 
 var rfC = new RokforConnector();
@@ -437,6 +498,12 @@ app.post('/poll', jsonParser, function (req, res) {
       rfC.checkDatabase(u.Name, u.Key);
     })
   })
+});
+
+app.get('/sync/:rfId(\d+)', jsonParser, function (req, res) {
+  res.send("ok");
+  req.params.rfId
+  rfC.syncContribution(req.params.rfId);
 });
 
 app.get('/',function(req,res)
