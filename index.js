@@ -97,7 +97,7 @@ class RokforConnector {
           db.createWithUser(
               username,      // username
               apikey,        // password
-              ["admins"],            // array of roles
+              ["admin"],            // array of roles
               function (err, res) {       // callback
                 if (!err) {
                   db.addNames(
@@ -143,7 +143,7 @@ class RokforConnector {
           db2.createWithUser(
               username,                 // username
               apikey,        // password
-              ["admins"],               // array of roles
+              ["admin"],               // array of roles
               function (err, res) {       // callback
                 if (!err) {
                   db2.addNames(
