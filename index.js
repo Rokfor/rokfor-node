@@ -27,7 +27,7 @@ class RokforConnector {
     	username    = config.username,
       userpass    = config.userpass;
     this.cradle      = require('cradle_security')({
-                        debug: true,                // set true to see all log messages
+                        debug: false,                // set true to see all log messages
                         adminUsername: username,     // set your admin username
                         adminPassword: userpass   // set your admin password
                     });
@@ -97,7 +97,7 @@ class RokforConnector {
           db.createWithUser(
               username,      // username
               apikey,        // password
-              [],            // array of roles
+              ["admins"],            // array of roles
               function (err, res) {       // callback
                 if (!err) {
                   db.addNames(
@@ -143,7 +143,7 @@ class RokforConnector {
           db2.createWithUser(
               username,                 // username
               apikey,        // password
-              [],               // array of roles
+              ["admins"],               // array of roles
               function (err, res) {       // callback
                 if (!err) {
                   db2.addNames(
@@ -167,7 +167,7 @@ class RokforConnector {
               _existing.push(username);
               db2.addNames(
                   _existing,               // array of admin roles
-                  [  ],               // array of member roles
+                  _existing,               // array of member roles
                   function (err, res) {       // callback
                       log.info(res);       // it should be { ok: true } if no error occurred
                       _this.syncIssueBase(issues, username, apikey, ++issue_index)
@@ -301,7 +301,7 @@ class RokforConnector {
   /**
    * writer2rokfor
    * Direction: Writer -> Rokfor
-   * Listen to changes within data-* Databases
+   * Listen to changes within issue-* Databases
    * Listen to CouchDB watch stream
    **/
 
@@ -322,6 +322,8 @@ class RokforConnector {
             // Create, Update, Delete
             if (changes.deleted === true) {
               //console.log(`DEL Document Id ${changes.id}`, changes.doc.data);
+              log.info("DELETE Document");
+
               _this.lockContribution(changes.id);
               var req = _this.unirest("DELETE", `${_this.api.endpoint}contribution/${changes.doc.data}`);
               req.headers({
@@ -336,51 +338,54 @@ class RokforConnector {
               });
             }
             else {
-              if (changes.doc.data.id === -1 || changes.doc.data.id === 0) {
-                _this.lockContribution(changes.id);
-                log.info("PUT Document");
-                // Creat new Rokfor Document
-                var req = _this.unirest("PUT", `${_this.api.endpoint}contribution`);
-                req.headers({
-                  "content-type": "application/json",
-                  "authorization": `Bearer ${_this.jwt}`
-                });
-                req.type("json");
-                req.send({
-                  "Template": _this.api.template,
-                  "Name": changes.doc.data.name,
-                  "Chapter": _this.api.chapter,
-                  "Issue": parseInt(changes.doc.data.issue),
-                  "Status": "Draft"
-                });
-                req.end(function (res) {
-                  if (res.error) {
-                     log.info(res.error);
-                  }
-                  else {
-                    let _newContribution = res.body;
-                    _this.storeContribution(changes, name, _newContribution.Id).then(function(err){
-                      log.info('+++ finished storeContribtution: ', err);
-                      if (err) {
-                        _this.unlockContribution(changes.id);
-                      }
-                      else {
-                        // Update CouchDB with Rokfor id
-                        _this.updateCouch(changes, name, _newContribution.Id).then(function(err){
+              if (changes.doc.data !== undefined) {
+                if (changes.doc.data.id === -1 || changes.doc.data.id === 0) {
+                  _this.lockContribution(changes.id);
+                  log.info("PUT Document");
+                  // Creat new Rokfor Document
+                  var req = _this.unirest("PUT", `${_this.api.endpoint}contribution`);
+                  req.headers({
+                    "content-type": "application/json",
+                    "authorization": `Bearer ${_this.jwt}`
+                  });
+                  req.type("json");
+                  req.send({
+                    "Template": _this.api.template,
+                    "Name": changes.doc.data.name,
+                    "Chapter": _this.api.chapter,
+                    "Issue": parseInt(changes.doc.data.issue),
+                    "Status": "Draft"
+                  });
+                  req.end(function (res) {
+                    if (res.error) {
+                       log.info(res.error);
+                    }
+                    else {
+                      let _newContribution = res.body;
+                      _this.storeContribution(changes, name, _newContribution.Id).then(function(err){
+                        log.info('+++ finished storeContribtution: ', err);
+                        if (err) {
                           _this.unlockContribution(changes.id);
-                        });
-                      }
-                    });
+                        }
+                        else {
+                          // Update CouchDB with Rokfor id
+                          _this.updateCouch(changes, name, _newContribution.Id).then(function(err){
+                            _this.unlockContribution(changes.id);
+                          });
+                        }
+                      });
 
-                  }
-                });
-              }
-              else if (changes.doc.data) {
-                _this.lockContribution(changes.id);
-                // console.log(`UPDATE Document ${changes.doc.data.name}`);
-                _this.storeContribution(changes, name).then(function(err){
-                  _this.unlockContribution(changes.id);
-                });
+                    }
+                  });
+                }
+                else {
+                  _this.lockContribution(changes.id);
+                  // console.log(`UPDATE Document ${changes.doc.data.name}`);
+                  _this.storeContribution(changes, name).then(function(err){
+                    _this.unlockContribution(changes.id);
+                  });
+                }
+
               }
             }
           }.bind(name));
@@ -492,7 +497,7 @@ app.post('/poll', jsonParser, function (req, res) {
   res.send("ok");
   rfC.loadUsers().then(function(users) {
     log.info(users);
-    // Check if DBs exist in CouchDB: data-{user} and rf-{user}
+    // Check if DBs exist in CouchDB: issue-{issueid} and rf-{username}
     // Check if user exists in CouchDB
     users.forEach(function(u){
       rfC.checkDatabase(u.Name, u.Key);
