@@ -74,10 +74,12 @@ class RokforConnector {
     });
     req.end(function (res) {
       if (res.error) {
-        throw new Error(res.error);
+        log.error(`Load Users Failed: ${res.error}`);
         deferred.resolve(false);
       }
-      deferred.resolve(res.body);
+      else {
+        deferred.resolve(res.body);
+      }
     });
     return deferred.promise;
   }
@@ -87,13 +89,25 @@ class RokforConnector {
    *  - checks CouchDB for existing users and databases.
    **/
 
-  checkDatabase(username, apikey) {
+  checkDatabase(users, uindex, deferred) {
+    deferred = deferred || q.defer();
+    uindex = uindex || 0;
+    if (users[uindex] === undefined) {
+      deferred.resolve(true);
+      return;
+    }
+    let username = users[uindex].Name;
+    let apikey = users[uindex].Key;
+
     var _this = this;
     var db = this.connection.database(`rf-${username}`);
+
+    log.info(`*** checkDatabase: ${username}`)
+
     db.exists(function (err, exists) {
       if (!err) {
         if (!exists) {
-          log.info(`Creating rf-${username}`);
+          log.info(`    + IssueDB Creating rf-${username}`);
           db.createWithUser(
               username,      // username
               apikey,        // password
@@ -104,8 +118,9 @@ class RokforConnector {
                       [ username ],               // array of admin roles
                       [ username ],               // array of member roles
                       function (err, res) {       // callback
-                        log.info(res);
-                        _this.syncIssues(username, apikey)
+                        _this.syncIssues(username, apikey).then(function(){
+                          _this.checkDatabase(users, ++uindex, deferred)
+                        })
                       }
                   );
                 }
@@ -113,10 +128,14 @@ class RokforConnector {
           );
         }
         else {
-          _this.syncIssues(username, apikey)
+          log.info(`    - IssueDB Exists: rf-${username}`);
+          _this.syncIssues(username, apikey).then(function(){
+            _this.checkDatabase(users, ++uindex, deferred)
+          });
         }
       }
     });
+    return deferred.promise;
   }
 
   /* Checks for existence of issue-{id} Databases in CouchDB
@@ -124,11 +143,13 @@ class RokforConnector {
    * - If it exists, checks the user rights
    */
 
-  syncIssueBase(issues, username, apikey, issue_index) {
+  syncIssueBase(issues, username, apikey, issue_index, deferred) {
+    deferred = deferred || q.defer();
     var _this = this;
     var issue_index = issue_index || 0;
 
     if (issues[issue_index] === undefined) {
+      deferred.resolve(true);
       return;
     }
 
@@ -151,10 +172,14 @@ class RokforConnector {
                       [ username ],               // array of member roles
                       function (err, res) {       // callback
                         log.info(res);
-                        _this.syncIssues(username, apikey)
-                        _this.syncIssueBase(issues, username, apikey, ++issue_index)
+                        //_this.syncIssues(username, apikey)
+                        _this.syncIssueBase(issues, username, apikey, ++issue_index, deferred)
                       }
                   );
+                }
+                else {
+                  log.info(`syncIssueBase: Error occurred while creating issue-${issueId}`);
+                  deferred.resolve(false);
                 }
               }
           );
@@ -162,22 +187,32 @@ class RokforConnector {
         else {
           log.info(`Checking rights for issue-${issueId} / user ${username}`);
           db2.get('_security', function (err, doc) {
-            let _existing = doc.admins.names;
-            if (_existing.indexOf(username) === -1) {
-              _existing.push(username);
-              db2.addNames(
-                  _existing,               // array of admin roles
-                  _existing,               // array of member roles
-                  function (err, res) {       // callback
-                      log.info(res);       // it should be { ok: true } if no error occurred
-                      _this.syncIssueBase(issues, username, apikey, ++issue_index)
-                  }
-              );
+            if (!err) {
+              let _existing = doc.admins ? doc.admins.names : [];
+              if (_existing.indexOf(username) === -1) {
+                _existing.push(username);
+                db2.addNames(
+                    _existing,               // array of admin roles
+                    _existing,               // array of member roles
+                    function (err, res) {       // callback
+                        log.info(res);       // it should be { ok: true } if no error occurred
+                        _this.syncIssueBase(issues, username, apikey, ++issue_index, deferred)
+                    }
+                );
+              }
+              else {
+                _this.syncIssueBase(issues, username, apikey, ++issue_index, deferred)
+              }
+            }
+            else {
+              log.info(`syncIssueBase: Error occurred while checking _security of issue-${issueId}`);
+              deferred.resolve(false);
             }
           });
         }
       }
     });
+    return deferred.promise;
   }
 
 
@@ -190,6 +225,7 @@ class RokforConnector {
   syncIssues(username, apikey) {
     /* TODO Download Issues and store them here... */
     /* Sync even if db exist. */
+    var deferred = q.defer();
     var _this = this;
     var req = this.unirest("GET", `${this.api.endpoint}issues`);
     req.headers({
@@ -198,7 +234,8 @@ class RokforConnector {
     });
     req.end(function (res) {
       if (res.error) {
-        log.info('syncIssues: could not connect to rokfor api');
+        log.error('syncIssues: could not connect to rokfor api');
+        deferred.resolve(false);
       }
       else {
         let _db = _this.connection.database(`rf-${username}`);
@@ -210,31 +247,36 @@ class RokforConnector {
               }, function (err, res) {
                 log.info(`created issues for ${username}`)
                 if (res.body && res.body.Issues) {
-                  _this.syncIssueBase(res.body.Issues, username, apikey)
+                  _this.syncIssueBase(res.body.Issues, username, apikey).then(function() {
+                    deferred.resolve(true);
+                  })
                 }
-                _this.reSync();
+                else {
+                  deferred.resolve(false);
+                }
               });
             }
             else {
-              log.info('error merging Issues into CouchDB')
+              log.info('error merging Issues into CouchDB');
+              deferred.resolve(false);
             }
           }
           else {
             log.info(`synced issues for ${username}`)
             if (res.body && res.body.Issues) {
-              _this.syncIssueBase(res.body.Issues, username, apikey)
+              _this.syncIssueBase(res.body.Issues, username, apikey).then(function(){
+                deferred.resolve(true);
+              })
             }
             else {
               log.info(`no issues for ${res.body}`)
+              deferred.resolve(false);
             }
-            _this.reSync();
           }
         });
       }
     });
-
-
-
+    return deferred.promise;
   }
 
   /**
@@ -255,24 +297,32 @@ class RokforConnector {
     });
     req.end(function (res) {
       if (res.error) {
-        throw new Error(res.error);
+        log.error(`Login Failed: ${res.error}`);
         deferred.resolve(false);
       }
-      _this.jwt = res.body;
-      deferred.resolve(_this.jwt);
+      else {
+        _this.jwt = res.body;
+        deferred.resolve(_this.jwt);
+      }
     });
     return deferred.promise;
   }
 
   /**
-   * reSync
+   * reWatch
    * Stops all watchers
    * Restarts writer2rokfor
    **/
-  reSync() {
-      /*this.watchers.forEach(function(watcher){
+  reWatch() {
+
+
+      this.watchers.forEach(function(watcher){
         watcher.stop();
-      })*/
+      })
+      this.watchers = [];
+
+      log.info(`reWatch: stopped all watchers. counting: ${this.watchers.length} after...`)
+
       this.writer2rokfor();
   }
 
@@ -392,6 +442,9 @@ class RokforConnector {
           _watcher.on('error', function(err){
             log.info("Error Ocurred", err);
           })
+          _watcher.on('stop', function(){
+            log.info(`Stopping Watcher for db: ${this.db.split('/').splice(-1)}`);
+          })
           _this.watchers.push(_watcher);
         }
       })
@@ -492,17 +545,32 @@ class RokforConnector {
 var rfC = new RokforConnector();
 var app = express();
 var jsonParser = bodyParser.json()
+app.polling = false;
 
 app.post('/poll', jsonParser, function (req, res) {
-  res.send("ok");
-  rfC.loadUsers().then(function(users) {
-    log.info(users);
-    // Check if DBs exist in CouchDB: issue-{issueid} and rf-{username}
-    // Check if user exists in CouchDB
-    users.forEach(function(u){
-      rfC.checkDatabase(u.Name, u.Key);
+  if (app.polling === true) {
+    log.info("--------------- polling in progress -----------------")
+    res.send("polling in progress...");
+  }
+  else {
+    log.info("--------------- polling -----------------")
+    app.polling = true;
+    rfC.loadUsers().then(function(users) {
+      // Check if DBs exist in CouchDB: issue-{issueid} and rf-{username}
+      // Check if user exists in CouchDB
+      if (users) {
+        rfC.checkDatabase(users).then(function() {
+          rfC.reWatch();
+          app.polling = false;
+          res.send("ok");
+        });
+      }
+      else {
+        app.polling = false;
+        res.send("could not connect to server");
+      }
     })
-  })
+  }
 });
 
 app.get('/sync/:rfId(\d+)', jsonParser, function (req, res) {
