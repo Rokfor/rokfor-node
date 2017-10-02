@@ -44,6 +44,7 @@ class RokforConnector {
     this.jwt = false;
     this.api = config.api;
     this.locks = [];
+    this.issues = {};
   }
 
   /**
@@ -348,6 +349,33 @@ class RokforConnector {
   }
 
 
+  async postIssue(issue) {
+    var obj = await new Promise((resolve, reject) => {
+      var req = this.unirest("POST", `${this.api.endpoint}issue/${issue.Id}`);
+      req.headers({
+        "authorization": `Bearer ${this.jwt}`,
+        "Content-Type": "application/json"
+      })
+      .type("json")
+      .send({
+        "Name": issue.Name,
+        "Options": issue.Options
+      })
+      .end(function (res) {
+        if (res.error) {
+          log.error(`Connector Call Failed: ${res.error}`);
+          log.error(`Message: ${res.body.message}`);
+          reject(res.body)
+        }
+        else {
+          log.info(`Ok: ${res.body}`);
+          resolve(res.body);
+        }
+      });
+    });
+    return obj;
+  }
+
   /**
    * writer2rokfor
    * Direction: Writer -> Rokfor
@@ -355,11 +383,12 @@ class RokforConnector {
    * Listen to CouchDB watch stream
    **/
 
-  writer2rokfor() {
+  async writer2rokfor() {
     log.info("* starting Writer -> Rokfor Sync...")
     let _this = this;
     this.connection.databases(function(a,e){
       e.forEach(function(name) {
+        /* Storing Changes in Contributions */
         if (name.indexOf("issue-") !== -1) {
           let _watcher = _this.connection.database(name).changes({since:"now", include_docs: true});
           _watcher.on('change', function (changes) {
@@ -437,6 +466,32 @@ class RokforConnector {
                 }
 
               }
+            }
+          }.bind(name));
+          _watcher.on('error', function(err){
+            log.info("Error Ocurred", err);
+          })
+          _watcher.on('stop', function(){
+            log.info(`Stopping Watcher for db: ${this.db.split('/').splice(-1)}`);
+          })
+          _this.watchers.push(_watcher);
+        }
+        /* Storing Changes in Issue Editor */
+        else if (name.indexOf("rf-") !== -1) {
+          let _watcher = _this.connection.database(name).changes({since:"now", include_docs: true});
+          _watcher.on('change', function (changes) {
+            // Create, Update, Delete
+            if (changes.deleted !== true && changes.doc.data !== undefined) {
+              //changes.doc.data.Issues, changes
+              _this.issues[name] = _this.issues[name] || [];
+              changes.doc.data.Issues.forEach(function(_i) {
+                _this.issues[name][_i.Id] = _this.issues[name][_i.Id] || {};
+                if (JSON.stringify(_i) !== JSON.stringify(_this.issues[name][_i.Id])) {
+                  log.info(`Issue ${_i.Id} has changed...`);
+                  _this.postIssue(_i);
+                }
+                _this.issues[name][_i.Id] = _i;
+              })
             }
           }.bind(name));
           _watcher.on('error', function(err){
