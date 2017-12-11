@@ -5,6 +5,7 @@
  *  Propagates Rokfor Database Changes to a CouchDB
  *
  **/
+
 "use strict";
 
 var config = require('./config/config.js')
@@ -172,7 +173,7 @@ class RokforConnector {
                       [ username ],               // array of admin roles
                       [ username ],               // array of member roles
                       function (err, res) {       // callback
-                        log.info(res);
+                        // log.info(res);
                         //_this.syncIssues(username, apikey)
                         _this.syncIssueBase(issues, username, apikey, ++issue_index, deferred)
                       }
@@ -196,7 +197,7 @@ class RokforConnector {
                     _existing,               // array of admin roles
                     _existing,               // array of member roles
                     function (err, res) {       // callback
-                        log.info(res);       // it should be { ok: true } if no error occurred
+                        //log.info(res);       // it should be { ok: true } if no error occurred
                         _this.syncIssueBase(issues, username, apikey, ++issue_index, deferred)
                     }
                 );
@@ -418,8 +419,8 @@ class RokforConnector {
             }
             else {
               if (changes.doc.data !== undefined) {
+                _this.lockContribution(changes.id);
                 if (changes.doc.data.id === -1 || changes.doc.data.id === 0) {
-                  _this.lockContribution(changes.id);
                   log.info("PUT Document");
                   // Creat new Rokfor Document
                   var req = _this.unirest("PUT", `${_this.api.endpoint}contribution`);
@@ -437,7 +438,8 @@ class RokforConnector {
                   });
                   req.end(function (res) {
                     if (res.error) {
-                       log.info(res.error);
+                       //log.info(res.error);
+                       log.info("!!! PUT FAILED");
                     }
                     else {
                       let _newContribution = res.body;
@@ -458,7 +460,6 @@ class RokforConnector {
                   });
                 }
                 else {
-                  _this.lockContribution(changes.id);
                   // console.log(`UPDATE Document ${changes.doc.data.name}`);
                   _this.storeContribution(changes, name).then(function(err){
                     _this.unlockContribution(changes.id);
@@ -563,13 +564,13 @@ class RokforConnector {
     });
     req.end(function (res) {
       if (res.error) {
-        log.info("Error while posting: ", res);
+        log.info("Error while posting: ", changes.id);
         let _db = _this.connection.database(dbname);
         let _data = changes.doc.data;
         _data.id = -1;
         _db.merge(changes.id, {rokforid: -1, data: _data}, function (err, res) {
           if (err) {
-            log.info("Error while resetting to -1 in CouchDB", err, res);
+            log.info("Error while resetting to -1 in CouchDB");
           }
           else {
             log.info("Resetting to -1 in CouchDB");
