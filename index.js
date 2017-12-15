@@ -402,7 +402,7 @@ class RokforConnector {
             // Create, Update, Delete
             if (changes.deleted === true) {
               //console.log(`DEL Document Id ${changes.id}`, changes.doc.data);
-              log.info("DELETE Document");
+              log.info("DELETE Document", changes.doc.data);
 
               _this.lockContribution(changes.id);
               var req = _this.unirest("DELETE", `${_this.api.endpoint}contribution/${changes.doc.data}`);
@@ -421,7 +421,7 @@ class RokforConnector {
               if (changes.doc.data !== undefined) {
                 _this.lockContribution(changes.id);
                 if (changes.doc.data.id === -1 || changes.doc.data.id === 0) {
-                  log.info("PUT Document");
+                  log.info(`PUT Document ${_this.api.endpoint}contribution`);
                   // Creat new Rokfor Document
                   var req = _this.unirest("PUT", `${_this.api.endpoint}contribution`);
                   req.headers({
@@ -438,8 +438,9 @@ class RokforConnector {
                   });
                   req.end(function (res) {
                     if (res.error) {
-                       //log.info(res.error);
+                       log.info(res);
                        log.info("!!! PUT FAILED");
+                       _this.unlockContribution(changes.id);
                     }
                     else {
                       let _newContribution = res.body;
@@ -551,8 +552,7 @@ class RokforConnector {
       "Content-Type": "application/json"
     });
     req.type("json");
-    req.send({
-      "Name": changes.doc.data.name,
+    let payload = {
       "Sort": changes.doc.data.sort,
       "Status": "Draft",
       "Data": {
@@ -561,10 +561,15 @@ class RokforConnector {
         "_couchDB": changes.id,
         "_couchVersion": changes.doc._rev.split('-')[0]
       }
-    });
+    };
+    // Adding Name only if set - otherwise Rokfor sends an error...
+    if (changes.doc.data.name) {
+      payload.Name = changes.doc.data.name;
+    }
+    req.send(payload);
     req.end(function (res) {
       if (res.error) {
-        log.info("Error while posting: ", changes.id);
+        log.info("Error while posting: ", changes.id, res.body.error);
         let _db = _this.connection.database(dbname);
         let _data = changes.doc.data;
         _data.id = -1;
