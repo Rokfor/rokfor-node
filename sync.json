@@ -1,0 +1,12 @@
+{
+  "apps" : [{
+    "name"          : "sync",
+    "script"        : "./index.js",
+    "watch"         : ["./index.js", "config"],
+    "watch_options" : {
+                        persistent    : true,
+                        usePolling    : true,
+                        ignoreInitial : true
+                      }
+  }]
+}
