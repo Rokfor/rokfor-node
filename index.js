@@ -421,6 +421,7 @@ class RokforConnector {
               if (changes.doc.data !== undefined) {
                 _this.lockContribution(changes.id);
                 if (changes.id.indexOf('options') !== -1) {
+                  log.info(`UPDATE Issue from DB ${changes.doc.data.Id}`);
                   if (changes.doc.data.Id) {
                     _this.postIssue(changes.doc.data);
                   }
