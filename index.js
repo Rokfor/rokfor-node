@@ -421,6 +421,7 @@ class RokforConnector {
               if (changes.doc.data !== undefined) {
                 _this.lockContribution(changes.id);
                 log.info(`GOT CHANGE ON ${changes.id}`);
+                console.log(changes)
                 if (changes.doc.data.id === -1 || changes.doc.data.id === 0) {
                   log.info(`PUT Document ${_this.api.endpoint}contribution`);
                   // Creat new Rokfor Document
