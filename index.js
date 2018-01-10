@@ -487,6 +487,7 @@ class RokforConnector {
           _this.watchers.push(_watcher);
         }
         /* Storing Changes in Issue Editor */
+        /*
         else if (name.indexOf("rf-") !== -1) {
           let _watcher = _this.connection.database(name).changes({since:"now", include_docs: true});
           _watcher.on('change', function (changes) {
@@ -512,6 +513,7 @@ class RokforConnector {
           })
           _this.watchers.push(_watcher);
         }
+        */
       })
     });
   }
