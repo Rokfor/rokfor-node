@@ -420,55 +420,60 @@ class RokforConnector {
             else {
               if (changes.doc.data !== undefined) {
                 _this.lockContribution(changes.id);
-                log.info(`GOT CHANGE ON ${changes.id}`);
-                console.log(changes)
-                if (changes.doc.data.id === -1 || changes.doc.data.id === 0) {
-                  log.info(`PUT Document ${_this.api.endpoint}contribution`);
-                  // Creat new Rokfor Document
-                  var req = _this.unirest("PUT", `${_this.api.endpoint}contribution`);
-                  req.headers({
-                    "content-type": "application/json",
-                    "authorization": `Bearer ${_this.jwt}`
-                  });
-                  req.type("json");
-                  req.send({
-                    "Template": _this.api.template,
-                    "Name": changes.doc.data.name,
-                    "Chapter": _this.api.chapter,
-                    "Issue": parseInt(changes.doc.data.issue),
-                    "Status": "Draft"
-                  });
-                  req.end(function (res) {
-                    if (res.error) {
-                       log.info(res);
-                       log.info("!!! PUT FAILED");
-                       _this.unlockContribution(changes.id);
-                    }
-                    else {
-                      let _newContribution = res.body;
-                      _this.storeContribution(changes, name, _newContribution.Id).then(function(err){
-                        log.info('+++ finished storeContribtution: ', err);
-                        if (err) {
-                          _this.unlockContribution(changes.id);
-                        }
-                        else {
-                          // Update CouchDB with Rokfor id
-                          _this.updateCouch(changes, name, _newContribution.Id).then(function(err){
-                            _this.unlockContribution(changes.id);
-                          });
-                        }
-                      });
-
-                    }
-                  });
+                if (changes.id.indexOf('options') !== -1) {
+                  if (changes.doc.data.Id) {
+                    _this.postIssue(changes.doc.data);
+                  }
+                  _this.unlockContribution(changes.id);
                 }
                 else {
-                  // console.log(`UPDATE Document ${changes.doc.data.name}`);
-                  _this.storeContribution(changes, name).then(function(err){
-                    _this.unlockContribution(changes.id);
-                  });
-                }
+                  if (changes.doc.data.id === -1 || changes.doc.data.id === 0) {
+                    log.info(`PUT Document ${_this.api.endpoint}contribution`);
+                    // Creat new Rokfor Document
+                    var req = _this.unirest("PUT", `${_this.api.endpoint}contribution`);
+                    req.headers({
+                      "content-type": "application/json",
+                      "authorization": `Bearer ${_this.jwt}`
+                    });
+                    req.type("json");
+                    req.send({
+                      "Template": _this.api.template,
+                      "Name": changes.doc.data.name,
+                      "Chapter": _this.api.chapter,
+                      "Issue": parseInt(changes.doc.data.issue),
+                      "Status": "Draft"
+                    });
+                    req.end(function (res) {
+                      if (res.error) {
+                         log.info(res);
+                         log.info("!!! PUT FAILED");
+                         _this.unlockContribution(changes.id);
+                      }
+                      else {
+                        let _newContribution = res.body;
+                        _this.storeContribution(changes, name, _newContribution.Id).then(function(err){
+                          log.info('+++ finished storeContribtution: ', err);
+                          if (err) {
+                            _this.unlockContribution(changes.id);
+                          }
+                          else {
+                            // Update CouchDB with Rokfor id
+                            _this.updateCouch(changes, name, _newContribution.Id).then(function(err){
+                              _this.unlockContribution(changes.id);
+                            });
+                          }
+                        });
 
+                      }
+                    });
+                  }
+                  else {
+                    // console.log(`UPDATE Document ${changes.doc.data.name}`);
+                    _this.storeContribution(changes, name).then(function(err){
+                      _this.unlockContribution(changes.id);
+                    });
+                  }
+                }
               }
             }
           }.bind(name));
