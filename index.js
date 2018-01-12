@@ -44,8 +44,10 @@ class RokforConnector {
     this.unirest  = require("unirest");
     this.jwt = false;
     this.api = config.api;
-    this.locks = [];
+    this.locks = {};
     this.issues = {};
+    this.changeStack = [];
+    this.changesWorking = false;
   }
 
   /**
@@ -328,54 +330,161 @@ class RokforConnector {
       this.writer2rokfor();
   }
 
-  isLockedContribution(id) {
-    let i = this.locks.indexOf(id) > -1 ? true : false;
-    if (i === true) {
-      log.info(`IS Locked ${id}`);
+  async changesStackPush(name, c) {
+    c = c || false;
+    let _this = this;
+    
+    // Add Changes to Stack if there is a change parameter
+
+    if (c !== false) {
+      this.changeStack.push(c);  
+      log.info(`INCOMING CHANGE: ${c.deleted ? 'DELETE' : 'UPDATE'} ${c.doc.data.id} Stack length is now ${this.changeStack.length}`);
+      // Stop here if working changes are in progress
+      if (this.changesWorking === true) {
+        return;
+      }
     }
-    return (i);
-  }
 
-  lockContribution(id) {
-    //console.log(`Add lock ${id}`);
-    this.locks.push(id);
-  }
 
-  unlockContribution(id) {
-    let i = this.locks.indexOf(id);
-    if (i > -1) {
-      //console.log(`Unlock ${id}`);
-      this.locks.splice(i, 1);
+    // Get Current Changes Object: First from stack
+    
+    let changes = this.changeStack.length > 0 ? this.changeStack[0] : false;
+
+    // Return if there is nothing to do, reactivate state
+
+    if (changes === false) {
+      this.changesWorking = false;
+      return;
     }
-  }
+
+    // Start Propagating Changes to Rokfor - Lock Process.
+
+    this.changesWorking = true;
 
 
-  async postIssue(issue) {
-    var obj = await new Promise((resolve, reject) => {
-      var req = this.unirest("POST", `${this.api.endpoint}issue/${issue.Id}`);
-      req.headers({
-        "authorization": `Bearer ${this.jwt}`,
-        "Content-Type": "application/json"
-      })
-      .type("json")
-      .send({
-        "Name": issue.Name,
-        "Options": issue.Options
-      })
-      .end(function (res) {
-        if (res.error) {
-          log.error(`Connector Call Failed: ${res.error}`);
-          log.error(`Message: ${res.body.message}`);
-          reject(res.body)
+    // Create, Update, Delete
+    if (changes.deleted === true) {
+      log.info("DELETE Document", changes.doc.data);
+
+      // Await DELETE DOCUMENT
+      try {
+        await new Promise((resolve, reject) => {
+          var req = _this.unirest("DELETE", `${_this.api.endpoint}contribution/${changes.doc.data}`);
+          req.headers({
+            "content-type": "application/json",
+            "authorization": `Bearer ${_this.jwt}`
+          });
+          req.end(function (res) {
+            if (res.error) {
+              reject(res.error);
+            } else {
+              resolve(true);
+            }
+          });
+        });
+        log.info("DELETE Document ok");
+      } catch (err) {
+        log.info(`DELETE Document failed ${err}`);
+      }
+    }
+
+    else {
+      if (changes.doc.data !== undefined) {
+        if (changes.id.indexOf('options') !== -1) {
+          if (changes.doc.data.Id) {
+            log.info(`UPDATE Issue from DB ${changes.doc.data.Id}`);
+            let issue = changes.doc.data;
+            
+            // Await POST ISSUE
+
+            try {
+              await new Promise((resolve, reject) => {
+                var req = this.unirest("POST", `${this.api.endpoint}issue/${issue.Id}`);
+                req.headers({
+                  "authorization": `Bearer ${this.jwt}`,
+                  "Content-Type": "application/json"
+                })
+                .type("json")
+                .send({
+                  "Name": issue.Name,
+                  "Options": issue.Options
+                })
+                .end(function (res) {
+                  if (res.error) {
+                    reject(res.error)
+                  }
+                  else {
+                    resolve(res.body);
+                  }
+                });
+              });
+              log.info('POST Issue ok');
+            } catch (err) {
+              log.info(`POST Issue failed ${err}`);
+            }
+            
+          }
         }
         else {
-          log.info(`Ok: ${res.body}`);
-          resolve(res.body);
+
+          try {
+            await new Promise((resolve, reject) => {
+              _this.storeContribution(changes, name).then(function(){
+                resolve(true);
+              }).catch(function(err){
+                //if (_this.isLockedContribution(changes.id)) {
+                //  reject('CONTRIB LOCKED');
+                //}
+                log.info(`PUT Document ${_this.api.endpoint}contribution`);
+                var req = _this.unirest("PUT", `${_this.api.endpoint}contribution`);
+                req.headers({
+                  "content-type": "application/json",
+                  "authorization": `Bearer ${_this.jwt}`
+                });
+                req.type("json");
+                req.send({
+                  "Template": _this.api.template,
+                  "Name": changes.doc.data.name,
+                  "Chapter": _this.api.chapter,
+                  "Issue": parseInt(changes.doc.data.issue),
+                  "Status": "Draft"
+                });
+                req.end(function (res) {
+                  if (res.error) {
+                     reject("PUT FAILED");
+                  }
+                  else {
+
+                    let _newContribution = res.body;
+                    // This couchDB-id will be locked from now on, since it's put into rokfor.
+
+                    _this.locks[changes.id] = _newContribution.Id;
+
+                    _this.storeContribution(changes, name, _newContribution.Id).then(function(){
+                      _this.updateCouch(changes, name, _newContribution.Id).then(function(){
+                        resolve(true);
+                      });
+                    }).catch(function(err){
+                        reject("POST FAILED");
+                    });
+                  }
+                });
+
+              });
+            })
+            log.info('POST Contribution OK')
+          } catch (err) {
+            log.info(`POST Contribution failed ${err}`);
+          }
         }
-      });
-    });
-    return obj;
+      }
+    }
+
+    this.changeStack.splice(0, 1);
+    this.changesStackPush(name);
+
   }
+
 
   /**
    * writer2rokfor
@@ -389,94 +498,13 @@ class RokforConnector {
     let _this = this;
     this.connection.databases(function(a,e){
       e.forEach(function(name) {
-        /* Storing Changes in Contributions */
+
+        /* Watching ISSUES Databases */
+
         if (name.indexOf("issue-") !== -1) {
           let _watcher = _this.connection.database(name).changes({since:"now", include_docs: true});
           _watcher.on('change', function (changes) {
-
-            if (_this.isLockedContribution(changes.id) === true) {
-              return;
-            }
-
-
-            // Create, Update, Delete
-            if (changes.deleted === true) {
-              //console.log(`DEL Document Id ${changes.id}`, changes.doc.data);
-              log.info("DELETE Document", changes.doc.data);
-
-              _this.lockContribution(changes.id);
-              var req = _this.unirest("DELETE", `${_this.api.endpoint}contribution/${changes.doc.data}`);
-              req.headers({
-                "content-type": "application/json",
-                "authorization": `Bearer ${_this.jwt}`
-              });
-              req.end(function (res) {
-                if (res.error) {
-                  //console.log(res.error);
-                }
-                //console.log(res.body);
-              });
-            }
-            else {
-              if (changes.doc.data !== undefined) {
-                _this.lockContribution(changes.id);
-                if (changes.id.indexOf('options') !== -1) {
-                  log.info(`UPDATE Issue from DB ${changes.doc.data.Id}`);
-                  if (changes.doc.data.Id) {
-                    _this.postIssue(changes.doc.data);
-                  }
-                  _this.unlockContribution(changes.id);
-                }
-                else {
-                  if (changes.doc.data.id === -1 || changes.doc.data.id === 0) {
-                    log.info(`PUT Document ${_this.api.endpoint}contribution`);
-                    // Creat new Rokfor Document
-                    var req = _this.unirest("PUT", `${_this.api.endpoint}contribution`);
-                    req.headers({
-                      "content-type": "application/json",
-                      "authorization": `Bearer ${_this.jwt}`
-                    });
-                    req.type("json");
-                    req.send({
-                      "Template": _this.api.template,
-                      "Name": changes.doc.data.name,
-                      "Chapter": _this.api.chapter,
-                      "Issue": parseInt(changes.doc.data.issue),
-                      "Status": "Draft"
-                    });
-                    req.end(function (res) {
-                      if (res.error) {
-                         log.info(res);
-                         log.info("!!! PUT FAILED");
-                         _this.unlockContribution(changes.id);
-                      }
-                      else {
-                        let _newContribution = res.body;
-                        _this.storeContribution(changes, name, _newContribution.Id).then(function(err){
-                          log.info('+++ finished storeContribtution: ', err);
-                          if (err) {
-                            _this.unlockContribution(changes.id);
-                          }
-                          else {
-                            // Update CouchDB with Rokfor id
-                            _this.updateCouch(changes, name, _newContribution.Id).then(function(err){
-                              _this.unlockContribution(changes.id);
-                            });
-                          }
-                        });
-
-                      }
-                    });
-                  }
-                  else {
-                    // console.log(`UPDATE Document ${changes.doc.data.name}`);
-                    _this.storeContribution(changes, name).then(function(err){
-                      _this.unlockContribution(changes.id);
-                    });
-                  }
-                }
-              }
-            }
+            _this.changesStackPush(name, changes);
           }.bind(name));
           _watcher.on('error', function(err){
             log.info("Error Ocurred", err);
@@ -486,34 +514,6 @@ class RokforConnector {
           })
           _this.watchers.push(_watcher);
         }
-        /* Storing Changes in Issue Editor */
-        /*
-        else if (name.indexOf("rf-") !== -1) {
-          let _watcher = _this.connection.database(name).changes({since:"now", include_docs: true});
-          _watcher.on('change', function (changes) {
-            // Create, Update, Delete
-            if (changes.deleted !== true && changes.doc.data !== undefined) {
-              //changes.doc.data.Issues, changes
-              _this.issues[name] = _this.issues[name] || [];
-              changes.doc.data.Issues.forEach(function(_i) {
-                _this.issues[name][_i.Id] = _this.issues[name][_i.Id] || {};
-                if (JSON.stringify(_i) !== JSON.stringify(_this.issues[name][_i.Id])) {
-                  log.info(`Issue ${_i.Id} has changed...`);
-                  _this.postIssue(_i);
-                }
-                _this.issues[name][_i.Id] = _i;
-              })
-            }
-          }.bind(name));
-          _watcher.on('error', function(err){
-            log.info("Error Ocurred", err);
-          })
-          _watcher.on('stop', function(){
-            log.info(`Stopping Watcher for db: ${this.db.split('/').splice(-1)}`);
-          })
-          _this.watchers.push(_watcher);
-        }
-        */
       })
     });
   }
@@ -532,7 +532,6 @@ class RokforConnector {
       let _data = changes.doc.data;
       _data.id = id;
       _db.merge(changes.id, {rokforid: id, data: _data}, function (err, res) {
-        //console.log(err, res);
         deferred.resolve(true);
       });
     }
@@ -554,8 +553,15 @@ class RokforConnector {
 
     var deferred = q.defer();
     id = id || changes.doc.data.id;
-    log.info('storeContribution', id);
+
+    if (this.locks[changes.id]) {
+      log.info("Apply Lock")
+      id = this.locks[changes.id];
+    }
+
+
     let _this = this;
+    
     var req = _this.unirest("POST", `${_this.api.endpoint}contribution/${id}`);
     req.headers({
       "authorization": `Bearer ${_this.jwt}`,
@@ -578,23 +584,11 @@ class RokforConnector {
     }
     req.send(payload);
     req.end(function (res) {
-      if (res.error) {
-        log.info("Error while posting: ", changes.id, res.body.error);
-        let _db = _this.connection.database(dbname);
-        let _data = changes.doc.data;
-        _data.id = -1;
-        _db.merge(changes.id, {rokforid: -1, data: _data}, function (err, res) {
-          if (err) {
-            log.info("Error while resetting to -1 in CouchDB");
-          }
-          else {
-            log.info("Resetting to -1 in CouchDB");
-          }
-          deferred.resolve(true);
-        });
+      if (res.error || !res.body.Id) {
+        deferred.reject(false);
       }
       else {
-        deferred.resolve(false);
+        deferred.resolve(res.body.Id);
       }
     });
     return deferred.promise;
