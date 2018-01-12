@@ -545,14 +545,13 @@ class RokforConnector {
 
   storeContribution(changes, dbname, id) {
 
-    /*
-
-    TODO: if document is not existing in rokfordatabase and the id is not -1, still put it and reset the id.
-
-    */
-
     var deferred = q.defer();
     id = id || changes.doc.data.id;
+
+    // In order to prevent multiple posting, us the lock id for a contribution
+    // if it's available. Multipe posting can happen, if a contribution does not
+    // exist within Rokfor and multiple change request happen to a non existing 
+    // Contribution while rokfor is still adding it to the database.
 
     if (this.locks[changes.id]) {
       log.info("Apply Lock")
