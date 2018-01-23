@@ -16,7 +16,9 @@ var q = require("q"),
     fs = require('fs'),
     Log = require('log'),
     log = new Log(config.loglevel, fs.createWriteStream('my.log'));
+    pkg        = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
 
+const version = pkg.version;
 
 class RokforConnector {
   constructor() {
@@ -609,8 +611,13 @@ class RokforConnector {
 var rfC = new RokforConnector();
 var app = express();
 var jsonParser = bodyParser.json()
-app.polling = false;
 
+/* Polling:
+   Synchronises the issue database in rokfor with couchdb
+   Adds users and issues
+*/
+
+app.polling = false;
 app.post('/poll', jsonParser, function (req, res) {
   if (app.polling === true) {
     log.info("--------------- polling in progress -----------------")
@@ -637,15 +644,26 @@ app.post('/poll', jsonParser, function (req, res) {
   }
 });
 
+/* Syncing:
+   Syncs changes from Rokfor to CouchDB
+   IMPLEMENTATION NEEDED!
+*/
+
 app.get('/sync/:rfId(\d+)', jsonParser, function (req, res) {
   res.send("ok");
   req.params.rfId
   rfC.syncContribution(req.params.rfId);
 });
 
+
+/* Start Page:
+   Nothing to show
+*/
+
 app.get('/',function(req,res)
 {
-    res.send("Rokfor <-> CouchDB Sync Server");
+  res.setHeader('Content-Type', 'application/json')
+  res.send(JSON.stringify({application: "Rokfor Writer Server", version: version})); 
 });
 
 
