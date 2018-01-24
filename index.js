@@ -74,12 +74,84 @@ class RokforConnector {
     var S4 = function() {
        return (((1+Math.random())*0x10000)|0).toString(16).substring(1).toLowerCase();
     };
-    return (S4()+S4()+"-"+S4()+"-"+S4()+"-"+S4()+"-"+S4()+S4()+S4());
+    return (Date.now() + "-"+S4()+S4()+S4());
+  }
+
+
+  putIssueRokfor() {
+    let self = this;
+    return new Promise((resolve, reject) => {
+      var req = self.unirest("PUT", `${self.api.endpoint}issue`);
+      req.headers({
+        "content-type": "application/json",
+        "authorization": `Bearer ${self.jwt}`
+      });
+      req.type("json");
+      req.send({
+        "Name": "Your First Book",
+        "Forbook": self.api.book
+      });
+      req.end(function (res) {
+        if (res.error) {
+           reject("PUT FAILED");
+        }
+        else {
+          let _newIssue = res.body.Id;
+          var _req = self.unirest("GET", `${self.api.endpoint}issues/${_newIssue}`);
+          _req.headers({
+            "content-type": "application/json",
+            "authorization": `Bearer ${self.api.rokey}`
+          });
+          _req.end(function (res) {
+            if (res.error) {
+              log.info(res);
+              log.error("Load Issue Failed");
+              reject("Load Issue Failed");
+            }
+            else {
+              resolve(res.body);
+            }
+          });
+        }
+      });
+    });
   }
 
 
   async signupCheck(email) {
+
     let b64mail = this.guidGenerator();
+
+    /* Check if users exists */
+
+    try {
+      let r = await new Promise((resolve, reject) => {
+        var db = this.connection.database(`email`);
+        db.get(email, function (err, doc) {
+          if (err && err.error === "not_found") {
+            db.save(email, {
+              key: b64mail,
+              state: "unused"
+            }, function (err, res) {
+              if (err) {
+                reject("E-Mail could not be stored.");
+              }
+              else {
+                resolve(true);
+              }
+            });
+          }
+          else {
+            reject("E-Mail already registered.");
+          }
+          
+        });
+      });
+    } catch (err) {
+      return err;
+    }
+
+
     try {
       let r = await new Promise((resolve, reject) => {
         var db = this.connection.database(`rf-${b64mail}`);
@@ -97,7 +169,42 @@ class RokforConnector {
               let add = await self.addDatabase(db, b64mail, password);
               if (add === true) {
                 console.log(`Database added`)
-                resolve(true);
+
+                // Put a rokfor issue here for starters
+                let newIssue = false;
+                try {
+                  newIssue = await self.putIssueRokfor();
+                } catch (err) {
+                  reject ("Could not add new issue");
+                }
+
+                // Add the issue database to couch with the right user
+                let newIssueId = false;
+                try {
+                  newIssueId = newIssue.Issues[0].Id;
+                } catch (err) {
+                  reject("New Issue returned no id");
+                }
+
+                let newissue = self.connection.database(`issue-${newIssueId}`);
+                await self.addDatabase(newissue, b64mail, password);
+
+                // Update rf-{username} with the newly issue id
+
+                db.save('issues', {
+                  data: newIssue
+                }, function (err, res) {
+                  if (err) {
+                    reject ("Could not add new issue");
+                  }
+                  else {
+                    self.reWatch();
+                    resolve(true);
+                  }
+                });
+
+
+                
               }
               else {
                 reject (add);
