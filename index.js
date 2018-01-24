@@ -15,8 +15,10 @@ var q = require("q"),
     bodyParser = require('body-parser'),
     fs = require('fs'),
     Log = require('log'),
-    log = new Log(config.loglevel, fs.createWriteStream('my.log'));
-    pkg        = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+    cors = require('cors'),
+    log = new Log(config.loglevel, fs.createWriteStream('my.log')),
+    nodemailer = require('nodemailer'),
+    pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
 
 const version = pkg.version;
 
@@ -29,6 +31,7 @@ class RokforConnector {
       port        = config.port,
     	username    = config.username,
       userpass    = config.userpass;
+      
     this.cradle      = require('cradle_security')({
                         debug: false,                // set true to see all log messages
                         adminUsername: username,     // set your admin username
@@ -50,6 +53,7 @@ class RokforConnector {
     this.issues = {};
     this.changeStack = [];
     this.changesWorking = false;
+    this.smtp = config.mailer;
   }
 
   /**
@@ -64,6 +68,116 @@ class RokforConnector {
       deferred.resolve(data);
     });
     return deferred.promise;
+  }
+
+  guidGenerator() {
+    var S4 = function() {
+       return (((1+Math.random())*0x10000)|0).toString(16).substring(1).toLowerCase();
+    };
+    return (S4()+S4()+"-"+S4()+"-"+S4()+"-"+S4()+"-"+S4()+S4()+S4());
+  }
+
+
+  async signupCheck(email) {
+    let b64mail = this.guidGenerator();
+    try {
+      let r = await new Promise((resolve, reject) => {
+        var db = this.connection.database(`rf-${b64mail}`);
+        let self = this;
+        log.info(`*** checkDatabase: ${b64mail}`)
+        db.exists(async function (err, exists) {
+          if (!err && !exists) {
+            console.log(`DB DOES NOT EXIST: rf-${b64mail}`)
+
+            // Create new password
+            let password = Math.random().toString(36).slice(-8);
+            let res = await self.sendMail(email, password, b64mail);
+            if (res === true) {
+              console.log(`Mail sent to ${email}`)
+              let add = await self.addDatabase(db, b64mail, password);
+              if (add === true) {
+                console.log(`Database added`)
+                resolve(true);
+              }
+              else {
+                reject (add);
+              }
+            }
+            else {
+              reject (res);
+            }
+          }
+          else {
+            reject('User already exists');
+          }
+        });
+      });
+      return r;
+    } catch (err) {
+      return err;
+    }
+  }
+
+
+  async addDatabase(db, username, apikey) {
+    try {    
+      let r = await new Promise((resolve, reject) => {
+        db.createWithUser(
+              username,      // username
+              apikey,        // password
+              ["admin"],            // array of roles
+              function (err, res) {       // callback
+                if (!err) {
+                  db.addNames(
+                      [ username ],               // array of admin roles
+                      [ username ],
+                      function (err, res) {       // callback
+                        if (!err) {
+                          console.log(res);
+                          resolve(true);
+                        } else {
+                          console.log(err);
+                          reject("Error adding database..");
+                        }
+                      }
+                  )
+                }
+                else {
+                  console.log(err)
+                  reject("Error adding database.")
+                }
+              }
+        )
+      });
+      return r;
+    } catch (err) {
+      return err;
+    }
+  }
+
+  async sendMail(email, password, b64mail) {
+    try {    
+      let r = await new Promise((resolve, reject) => {
+        var transporter = nodemailer.createTransport(this.smtp);
+        var mailOptions = {
+            from: this.smtp.sender, // sender address
+            to: email, // list of receivers
+            subject: 'Writer Signup', // Subject line
+            html: '<b>You just signed up for rokfor writer:</b><br>This is your password: ' + password + '<br>This is your access key: ' + b64mail
+        };
+        transporter.sendMail(mailOptions, function(error, info){
+            if(error){
+              console.log(error);
+              reject("Error Sending E-Mail")
+            }else{
+              resolve(true);
+            };
+        });
+      });
+      return r;
+    } catch (err) {
+      return err;
+    }
   }
 
   /**
@@ -611,6 +725,35 @@ class RokforConnector {
 var rfC = new RokforConnector();
 var app = express();
 var jsonParser = bodyParser.json()
+app.use(cors())
+
+/* Start Page:
+   Nothing to show
+*/
+
+app.post('/signup', jsonParser, async function(req,res)
+{
+  var re = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
+  res.setHeader('Content-Type', 'application/json')
+  if (re.test(req.body.email)) {
+    /* Check for existing Users */
+    let success = await rfC.signupCheck(req.body.email);
+    console.log(`Signup Check returned ${success}`);
+
+    if (success === true) {
+      res.send(JSON.stringify({application: "Rokfor Writer Server", version: version, state: "ok", message: "Thanks for signing up. Check your mailbox."}));   
+    }
+    else {
+      res.send(JSON.stringify({application: "Rokfor Writer Server", version: version, state: "error", message: success}));    
+    }
+
+    
+  }
+  else {
+    res.send(JSON.stringify({application: "Rokfor Writer Server", version: version, state: "error", message: "E-Mail has wrong format."})); 
+  }
+});
+
 
 /* Polling:
    Synchronises the issue database in rokfor with couchdb

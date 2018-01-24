@@ -13,5 +13,15 @@ module.exports = {
     "template" : 1        // Rokfor Template ID for Data Syncing
   },
   pollport    : 5050,     // Listener Port for Route Hook Callbacks
-  loglevel    : 'debug'
+  loglevel    : 'debug',
+  mailer      : {
+    sender: 'email@sender.com',
+    host: 'smtp.example.com',
+    port: 587,
+    secure: false, // upgrade later with STARTTLS
+    auth: {
+        user: 'username',
+        pass: 'password'
+    }
+  }
 }
