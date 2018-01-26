@@ -2,7 +2,7 @@
   "apps" : [{
     "name"          : "sync",
     "script"        : "./index.js",
-    "watch"         : ["./index.js", "config"],
+    "watch"         : ["./index.js", "config", "lib"],
     "watch_options" : {
                         persistent    : true,
                         usePolling    : true,
