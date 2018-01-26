@@ -76,6 +76,7 @@ app.post('/delete', jsonParser, async function(req,res){
 */
 
 app.post('/add', jsonParser, async function(req,res){
+  log.info(req.body);
   let success = await rfC.addIssue(req.body.credentials.user, req.body.credentials.key);
   if (success === true) {
     res.send(JSON.stringify({
