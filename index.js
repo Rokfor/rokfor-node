@@ -17,7 +17,6 @@ var
     Log         = require('log'),
     cors        = require('cors'),
     log         = new Log(config.loglevel, fs.createWriteStream('my.log')),
-    nodemailer  = require('nodemailer'),
     rfC         = require('./lib/connector.js')(config, log),
     pkg         = JSON.parse(fs.readFileSync('./package.json', 'utf8')),
     jsonParser  = bodyParser.json();
@@ -69,6 +68,22 @@ app.post('/signup', jsonParser, async function(req,res){
 
 app.post('/delete', jsonParser, async function(req,res){
   let success = await rfC.leaveIssue(req.body.credentials.user, req.body.credentials.key, req.body.data.issue);
+  if (success === true) {
+    res.send(JSON.stringify({
+      application: appname, 
+      version: version, 
+      state: state.ok, 
+      message: "Successfully left the book."
+    }));   
+  }
+  else {
+    res.send(JSON.stringify({
+      application: appname, 
+      version: version, 
+      state: state.error, 
+      message: success
+    }));    
+  }
 });
 
 /* 
@@ -77,7 +92,6 @@ app.post('/delete', jsonParser, async function(req,res){
 
 app.post('/add', jsonParser, async function(req,res){
   let success = await rfC.addIssue(req.body.credentials.user, req.body.credentials.key);
-  log.info(success);
   if (success === true) {
     res.send(JSON.stringify({
       application: appname, 
