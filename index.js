@@ -116,6 +116,22 @@ app.post('/add', jsonParser, async function(req,res){
 
 app.post('/share', jsonParser, async function(req,res){
   let success = await rfC.inviteIssue(req.body.credentials.user, req.body.credentials.key, req.body.data.issue, req.body.data.invite);
+    if (success === true) {
+    res.send(JSON.stringify({
+      application: appname, 
+      version: version, 
+      state: state.ok, 
+      message: "User invited."
+    }));   
+  }
+  else {
+    res.send(JSON.stringify({
+      application: appname, 
+      version: version, 
+      state: state.error, 
+      message: success
+    }));    
+  }
 });
 
 /* Polling:
