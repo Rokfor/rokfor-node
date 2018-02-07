@@ -1,5 +1,6 @@
 
 module.exports = {
+  domain      : '',       // Own domain name, i.e. 'https://xxx.yyy.com'
   server      : '',       // CouchDB Url
   port        : 6984,     // CouchDB Port
   username    : '',       // CouchDB Administrator Name

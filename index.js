@@ -67,6 +67,7 @@ app.post('/signup', jsonParser, async function(req,res){
 */
 
 app.post('/delete', jsonParser, async function(req,res){
+  res.setHeader('Content-Type', 'application/json')  
   let success = await rfC.leaveIssue(req.body.credentials.user, req.body.credentials.key, req.body.data.issue);
   if (success === true) {
     res.send(JSON.stringify({
@@ -91,6 +92,7 @@ app.post('/delete', jsonParser, async function(req,res){
 */
 
 app.post('/add', jsonParser, async function(req,res){
+  res.setHeader('Content-Type', 'application/json')  
   let success = await rfC.addIssue(req.body.credentials.user, req.body.credentials.key);
   if (success === true) {
     res.send(JSON.stringify({
@@ -115,6 +117,7 @@ app.post('/add', jsonParser, async function(req,res){
 */
 
 app.post('/share', jsonParser, async function(req,res){
+  res.setHeader('Content-Type', 'application/json')  
   let success = await rfC.inviteIssue(req.body.credentials.user, req.body.credentials.key, req.body.data.issue, req.body.data.invite);
     if (success === true) {
     res.send(JSON.stringify({
@@ -131,6 +134,83 @@ app.post('/share', jsonParser, async function(req,res){
       state: state.error, 
       message: success
     }));    
+  }
+});
+
+/* Exporters: Returns a list of exporters available  */
+
+app.post('/exporters', jsonParser, async function(req,res){
+  res.setHeader('Content-Type', 'application/json')  
+  let success = await rfC.getExporters(req.body.credentials.user, req.body.credentials.key);
+  if (success === false) {
+    res.send(JSON.stringify({
+      application: appname, 
+      version: version, 
+      state: state.error, 
+      message: "Wrong Credentials"
+    }));    
+  }
+  else {
+    res.send(JSON.stringify({
+      application: appname, 
+      version: version, 
+      exporters: success,
+      state: state.ok,
+    }));   
+  }
+});
+
+/* Exporters: Returns a list of exporters available  */
+
+app.post('/export', jsonParser, async function(req,res){
+  res.setHeader('Content-Type', 'application/json')  
+  let success = await rfC.doExport(req.body.credentials.user, req.body.credentials.key, req.body.data.exporterId, req.body.data.issueId);
+  if (success === false) {
+    res.send(JSON.stringify({
+      application: appname, 
+      version: version, 
+      state: state.error, 
+      message: "Wrong Credentials"
+    }));    
+  }
+  else {
+    res.send(JSON.stringify({
+      application: appname, 
+      version: version, 
+      exporters: success,
+      state: state.ok
+    }));   
+  }
+});
+
+
+/* Exporters: Returns a list of exporters available  */
+
+app.post('/callback/:uid', jsonParser, async function(req,res){
+  res.setHeader('Content-Type', 'application/json');
+  if (req.body.status == "Complete" && rfC.checkValidCallback(req.params.uid) === true) {
+    req.body.data.File = JSON.parse(req.body.data.File);
+    req.body.data.Pages = JSON.parse(req.body.data.Pages);
+
+    /* TODO: Add Info into CouchDB here in rf-issue, under "exports" */
+    
+    log.info(req.body);
+
+
+    res.send(JSON.stringify({
+      application: appname, 
+      version: version, 
+      message: "ok",
+      state: state.ok
+    })); 
+  }
+  else {
+    res.send(JSON.stringify({
+      application: appname, 
+      version: version, 
+      message: "generator returned an error",
+      state: state.error, 
+    })); 
   }
 });
 
