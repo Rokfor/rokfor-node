@@ -183,8 +183,31 @@ app.post('/export', jsonParser, async function(req,res){
   }
 });
 
-
-/* Exporters: Returns a list of exporters available  */
+/* 
+ * Callback: 
+ * Passed as argument to the rokfor generator in the POST /exporter router
+ * and called back after generator process has finished. E
+ *
+ * { status: 'Complete',
+ * id: INTEGER (jobid),
+ * data:
+ *  { Id: INTEGER (jobid),
+ *    File: { 
+ *      file1: 'https://url.com/file.pdf',
+ *      file2: 'https://url.com/file2.pdf' 
+ *    },
+ *    Date: INTEGER (Unix Timestamp),
+ *    Issue: INTEGER (issue id),
+ *    Plugin: INTEGER (plugin id),
+ *    Pages: { 
+ *      file1: [Object], 
+ *      file2: [Object] 
+ *    },
+ *    Otc: STRING (session auth, jwt),
+ *    ConfigSys: STRING (i.e. 'issues'),
+ *    ConfigValue: INTEGER (status, 2 equals 'Complete'),
+ *    Sort: null } }
+ */
 
 app.post('/callback/:uid', jsonParser, async function(req,res){
   res.setHeader('Content-Type', 'application/json');
@@ -194,14 +217,14 @@ app.post('/callback/:uid', jsonParser, async function(req,res){
 
     /* TODO: Add Info into CouchDB here in rf-issue, under "exports" */
     
-    log.info(req.body);
+    let _status = await rfC.storeExport(req.body.data.Issue, req.body.data);
 
 
     res.send(JSON.stringify({
       application: appname, 
       version: version, 
-      message: "ok",
-      state: state.ok
+      message: _status,
+      state: _status == 'ok' ? state.ok : state.error
     })); 
   }
   else {
