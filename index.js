@@ -164,7 +164,7 @@ app.post('/exporters', jsonParser, async function(req,res){
 
 app.post('/export', jsonParser, async function(req,res){
   res.setHeader('Content-Type', 'application/json')  
-  let success = await rfC.doExport(req.body.credentials.user, req.body.credentials.key, req.body.data.exporterId, req.body.data.issueId);
+  let success = await rfC.doExport(req.body.credentials.user, req.body.credentials.key, parseInt(req.body.data.exporterId), parseInt(req.body.data.issueId));
   if (success === false) {
     res.send(JSON.stringify({
       application: appname, 
