@@ -211,14 +211,11 @@ app.post('/export', jsonParser, async function(req,res){
 
 app.post('/callback/:uid', jsonParser, async function(req,res){
   res.setHeader('Content-Type', 'application/json');
-  if (req.body.status == "Complete" && rfC.checkValidCallback(req.params.uid) === true) {
-    req.body.data.File = JSON.parse(req.body.data.File);
-    req.body.data.Pages = JSON.parse(req.body.data.Pages);
+  if (rfC.checkValidCallback(req.params.uid) === true) {
 
     /* TODO: Add Info into CouchDB here in rf-issue, under "exports" */
-    
-    let _status = await rfC.storeExport(req.body.data.Issue, req.body.data);
-
+   
+    let _status = await rfC.storeExport(req.body.status, req.body.data.Issue, req.body.data);  
 
     res.send(JSON.stringify({
       application: appname, 
