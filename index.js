@@ -17,7 +17,8 @@ var
     Log         = require('log'),
     cors        = require('cors'),
     log         = new Log(config.loglevel, fs.createWriteStream('my.log')),
-    rfC         = require('./lib/connector.js')(config, log),
+    slack       = require('./lib/slack.js')(config, log),
+    rfC         = require('./lib/connector.js')(config, log, slack),
     pkg         = JSON.parse(fs.readFileSync('./package.json', 'utf8')),
     jsonParser  = bodyParser.json();
 

@@ -1,4 +1,3 @@
-
 module.exports = {
   domain      : '',       // Own domain name, i.e. 'https://xxx.yyy.com'
   server      : '',       // CouchDB Url
@@ -25,5 +24,6 @@ module.exports = {
         user: 'username',
         pass: 'password'
     }
-  }
+  },
+  slack_hook    : 'https://hooks.slack.com/services/****'
 }

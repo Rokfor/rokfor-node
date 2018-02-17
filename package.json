@@ -4,6 +4,7 @@
   "description": "Node Server syncing CouchDB to Rokfor",
   "main": "index.js",
   "dependencies": {
+    "@slack/client": "^3.16.0",
     "body-parser": "^1.16.0",
     "cors": "^2.8.4",
     "cradle": "^0.7.1",
