@@ -25,5 +25,6 @@ module.exports = {
         pass: 'password'
     }
   },
-  slack_hook    : 'https://hooks.slack.com/services/****'
+  slack_hook    : 'https://hooks.slack.com/services/****',
+  storefile     : true    // Stores the generated File as CouchDB Attachement
 }
