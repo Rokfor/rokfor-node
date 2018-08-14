@@ -26,5 +26,6 @@ module.exports = {
     }
   },
   slack_hook    : 'https://hooks.slack.com/services/****',
-  storefile     : true    // Stores the generated File as CouchDB Attachement
+  storefile     : true,    // Stores the generated File as CouchDB Attachement,
+  disablesignup : true
 }
