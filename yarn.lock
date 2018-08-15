@@ -323,9 +323,9 @@ cradle@^0.7.1:
     request "2.x.x"
     vargs "0.1.0"
 
-cradle_security@^0.2.1:
+"cradle_security@http://github.com/urshofer/cradle_security#master":
   version "0.2.1"
-  resolved "https://registry.yarnpkg.com/cradle_security/-/cradle_security-0.2.1.tgz#41cef9f210090ad2de4992c844628545404c9a6f"
+  resolved "http://github.com/urshofer/cradle_security#779c06fcac8b05696a43b3bf74cab59bc3426381"
   dependencies:
     async "^0.9.0"
     cradle "^0.6.7"
