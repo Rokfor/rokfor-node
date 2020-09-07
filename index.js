@@ -161,7 +161,7 @@ app.post('/exporters', jsonParser, async function(req,res){
   }
 });
 
-/* Exporters: Returns a list of exporters available  */
+/* Export: Run an export  */
 
 app.post('/export', jsonParser, async function(req,res){
   res.setHeader('Content-Type', 'application/json')  
