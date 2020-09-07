@@ -44,7 +44,7 @@ app.polling = false;
 
 app.post('/signup', jsonParser, async function(req,res){
   res.setHeader('Content-Type', 'application/json')  
-  let success = await rfC.signup(req.body.email);
+  let success = await rfC.signup(req.body.email, req.body.group);
   if (success === true) {
     res.send(JSON.stringify({
       application: appname, 
@@ -94,7 +94,7 @@ app.post('/delete', jsonParser, async function(req,res){
 
 app.post('/add', jsonParser, async function(req,res){
   res.setHeader('Content-Type', 'application/json')  
-  let success = await rfC.addIssue(req.body.credentials.user, req.body.credentials.key);
+  let success = await rfC.addIssue(req.body.credentials.user, req.body.credentials.key, req.body.credentials.group);
   if (success === true) {
     res.send(JSON.stringify({
       application: appname, 
@@ -142,7 +142,7 @@ app.post('/share', jsonParser, async function(req,res){
 
 app.post('/exporters', jsonParser, async function(req,res){
   res.setHeader('Content-Type', 'application/json')  
-  let success = await rfC.getExporters(req.body.credentials.user, req.body.credentials.key);
+  let success = await rfC.getExporters(req.body.credentials.user, req.body.credentials.key, req.body.credentials.group);
   if (success === false) {
     res.send(JSON.stringify({
       application: appname, 
