@@ -1,6 +1,6 @@
 {
   "name": "rokfor-node",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Node Server syncing CouchDB to Rokfor",
   "main": "index.js",
   "dependencies": {
