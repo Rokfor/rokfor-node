@@ -114,6 +114,26 @@ app.post('/add', jsonParser, async function(req,res){
 });
 
 /* 
+  Assets
+*/
+
+app.post('/assets', jsonParser, async function(req,res){
+  res.setHeader('Content-Type', 'application/json')  
+  let success = await rfC.handleAssets(req.body.credentials.user, req.body.credentials.key, req.body.data);
+  if (success.error === false) {
+    res.send(JSON.stringify(success.data));   
+  }
+  else {
+    res.send(JSON.stringify({
+      application: appname, 
+      version: version, 
+      state: state.error, 
+      message: success.data
+    }));    
+  }
+});
+
+/* 
   Share Issue: Add User to the allowed users
 */
 
