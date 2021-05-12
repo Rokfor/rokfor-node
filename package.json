@@ -13,7 +13,7 @@
     "express": "^4.16.3",
     "fs": "^0.0.1-security",
     "log": "^1.4.0",
-    "nodemailer": "^4.6.8",
+    "nodemailer": "^6.4.16",
     "q": "^1.5.1",
     "request": "^2.88.0",
     "unirest": "^0.5.1"
