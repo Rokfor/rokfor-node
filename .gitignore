@@ -4,3 +4,6 @@ npm-debug.log
 my.log
 couchdb
 .DS_Store
+package-lock.json
+yarn-error.log
+yarn.lock
