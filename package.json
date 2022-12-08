@@ -10,7 +10,7 @@
     "cradle": "^0.7.1",
     "cradle_security": "http://github.com/urshofer/cradle_security#master",
     "crypto": "^1.0.1",
-    "express": "^4.16.3",
+    "express": "^4.17.3",
     "fs": "^0.0.1-security",
     "log": "^1.4.0",
     "nodemailer": "^4.6.8",
