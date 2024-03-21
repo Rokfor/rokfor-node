@@ -38,6 +38,17 @@ const
 app.use(cors())
 app.polling = false;
 
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 413 && 'body' in err) {
+      // PayloadTooLargeError: Request entity too large
+      res.status(413).json({error: true, message: "Request entity too large"});
+  } else {
+      next();
+  }
+});
+
 /* 
   Signup Page for new Users 
 */
