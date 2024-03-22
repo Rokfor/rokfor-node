@@ -128,7 +128,8 @@ app.post('/assets', jsonParser, async function(req,res){
       application: appname, 
       version: version, 
       state: state.error, 
-      message: success.data
+      message: success.data,
+      error: true
     }));    
   }
 });
